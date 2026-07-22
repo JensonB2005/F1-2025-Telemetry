@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
@@ -41,6 +42,7 @@ import com.f1telemetry.viewer.data.MainViewModel
 import com.f1telemetry.viewer.ui.screens.AnalysisScreen
 import com.f1telemetry.viewer.ui.screens.CarScreen
 import com.f1telemetry.viewer.ui.screens.DashboardScreen
+import com.f1telemetry.viewer.ui.screens.RaceScreen
 import com.f1telemetry.viewer.ui.screens.ReplayScreen
 import com.f1telemetry.viewer.ui.screens.TracesScreen
 import com.f1telemetry.viewer.ui.theme.AccentGreen
@@ -68,6 +70,7 @@ private fun AppRoot(vm: MainViewModel = viewModel()) {
 
     val tabs = listOf(
         Tab("Dash", Icons.Filled.Speed),
+        Tab("Race", Icons.Filled.Leaderboard),
         Tab("Traces", Icons.Filled.Info),
         Tab("Car", Icons.Filled.Build),
         Tab("Analysis", Icons.Filled.Settings),
@@ -100,9 +103,10 @@ private fun AppRoot(vm: MainViewModel = viewModel()) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (selected) {
                 0 -> DashboardScreen(telemetry)
-                1 -> TracesScreen(telemetry)
-                2 -> CarScreen(telemetry)
-                3 -> AnalysisScreen(telemetry)
+                1 -> RaceScreen(telemetry)
+                2 -> TracesScreen(telemetry)
+                3 -> CarScreen(telemetry)
+                4 -> AnalysisScreen(telemetry)
                 else -> ReplayScreen(
                     controller = controller,
                     telemetry = telemetry,

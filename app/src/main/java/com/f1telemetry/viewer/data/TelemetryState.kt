@@ -59,10 +59,40 @@ data class TelemetryState(
 
     val events: List<TelemetryEvent> = emptyList(),
     val insights: List<Insight> = emptyList(),
+
+    val cars: List<LiveCar> = emptyList(),
+    val trackPath: List<Pair<Float, Float>> = emptyList(),
+    val fastestLapCarIndex: Int = -1,
+    val fastestLapMs: Long = 0L,
 ) {
     val playerName: String
         get() = header?.let { participants.getOrNull(it.playerCarIndex)?.name }?.takeIf { it.isNotBlank() } ?: "Player"
 }
+
+/** Aggregated per-car row for the timing tower and track map. */
+data class LiveCar(
+    val index: Int,
+    val position: Int,
+    val name: String,
+    val abbrev: String,
+    val teamId: Int,
+    val lastLapMs: Long,
+    val bestLapMs: Long,
+    val visualTyre: Int,
+    val tyreAge: Int,
+    val ersPct: Int,
+    val drsOpen: Boolean,
+    val drsAllowed: Boolean,
+    val pitting: Boolean,
+    val resultStatus: Int,
+    val penaltiesSec: Int,
+    val deltaAheadMs: Int,
+    val deltaLeaderMs: Int,
+    val lapDistance: Float,
+    val worldX: Float,
+    val worldZ: Float,
+    val isPlayer: Boolean,
+)
 
 enum class InsightLevel { INFO, TIP, WARNING, MISTAKE }
 

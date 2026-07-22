@@ -36,6 +36,37 @@ object F1Constants {
         else -> "Team $id"
     }
 
+    /** Team colour as 0xAARRGGBB for the timing tower and track-map dots. */
+    fun teamColor(id: Int): Long = when (id) {
+        0 -> 0xFF00D2BE  // Mercedes
+        1 -> 0xFFDC0000  // Ferrari
+        2 -> 0xFF3671C6  // Red Bull
+        3 -> 0xFF64C4FF  // Williams
+        4 -> 0xFF229971  // Aston Martin
+        5 -> 0xFF0093CC  // Alpine
+        6 -> 0xFF6692FF  // RB
+        7 -> 0xFFB6BABD  // Haas
+        8 -> 0xFFFF8000  // McLaren
+        9 -> 0xFF52E252  // Sauber
+        else -> 0xFF9A9AAE
+    }
+
+    /** Single-letter tyre code for the tower (S/M/H/I/W). */
+    fun tyreLetter(visualId: Int): String = when (visualId) {
+        16, 20 -> "S"; 17, 21 -> "M"; 18, 22 -> "H"; 19 -> "S"
+        7 -> "I"; 8, 15 -> "W"
+        else -> "-"
+    }
+
+    fun tyreColor(visualId: Int): Long = when (visualId) {
+        16, 19, 20 -> 0xFFE10600  // soft - red
+        17, 21 -> 0xFFFFD400      // medium - yellow
+        18, 22 -> 0xFFEDEDED      // hard - white
+        7 -> 0xFF39E75F           // intermediate - green
+        8, 15 -> 0xFF3671C6       // wet - blue
+        else -> 0xFF9A9AAE
+    }
+
     fun tyreCompound(id: Int): String = when (id) {
         16 -> "C5"; 17 -> "C4"; 18 -> "C3"; 19 -> "C2"; 20 -> "C1"; 21 -> "C0"; 22 -> "C6"
         7 -> "Inter"; 8 -> "Wet"

@@ -164,3 +164,28 @@ data class TelemetryEvent(
     val detail: String,
     val sessionTime: Float,
 )
+
+/** Lightweight per-car lap slice used to build the timing tower / track map. */
+data class CarLapLite(
+    val index: Int,
+    val position: Int,
+    val lastLapMs: Long,
+    val currentLapMs: Long,
+    val lapDistance: Float,
+    val pitStatus: Int,
+    val resultStatus: Int,
+    val penaltiesSec: Int,
+    val deltaAheadMs: Int,
+    val deltaLeaderMs: Int,
+    val currentLapNum: Int,
+)
+
+/** Lightweight per-car status slice (tyre / ERS / DRS-allowed). */
+data class CarStatusLite(
+    val index: Int,
+    val visualTyre: Int,
+    val actualTyre: Int,
+    val tyreAge: Int,
+    val ersPct: Int,
+    val drsAllowed: Int,
+)

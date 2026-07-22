@@ -4,6 +4,8 @@ import com.f1telemetry.viewer.analysis.HandlingEstimator
 import com.f1telemetry.viewer.analysis.MistakeDetector
 import com.f1telemetry.viewer.analysis.SetupAdvisor
 import com.f1telemetry.viewer.net.SessionRecorder
+import com.f1telemetry.viewer.telemetry.DriverCodes
+import com.f1telemetry.viewer.telemetry.F1Constants
 import com.f1telemetry.viewer.telemetry.MotionData
 import com.f1telemetry.viewer.telemetry.Parsed
 import com.f1telemetry.viewer.telemetry.PacketParser
@@ -34,6 +36,15 @@ object TelemetryRepository {
     private val lapInsights = ArrayList<Insight>()
     private var liveInsights: List<Insight> = emptyList()
 
+    // All-car state for the timing tower and track map.
+    private var lapAll: List<com.f1telemetry.viewer.telemetry.CarLapLite> = emptyList()
+    private var statusAll: List<com.f1telemetry.viewer.telemetry.CarStatusLite> = emptyList()
+    private var drsAll: List<Boolean> = emptyList()
+    private var posAll: List<Pair<Float, Float>> = emptyList()
+    private val bestLapByCar = LongArray(F1Constants.MAX_CARS)
+    private val trackBuckets = HashMap<Int, Pair<Float, Float>>()
+    private var trackPathCache: List<Pair<Float, Float>> = emptyList()
+
     @Volatile private var recorder: SessionRecorder? = null
 
     fun setRecorder(r: SessionRecorder?) { recorder = r }
@@ -48,6 +59,10 @@ object TelemetryRepository {
         lastSampleDistance = -1000f
         lapInsights.clear()
         liveInsights = emptyList()
+        lapAll = emptyList(); statusAll = emptyList(); drsAll = emptyList(); posAll = emptyList()
+        bestLapByCar.fill(0L)
+        trackBuckets.clear()
+        trackPathCache = emptyList()
         _state.value = TelemetryState(source = source)
     }
 
@@ -71,21 +86,40 @@ object TelemetryRepository {
         when (parsed) {
             is Parsed.Telemetry -> {
                 next = next.copy(telemetry = parsed.data)
+                if (parsed.allDrs.isNotEmpty()) drsAll = parsed.allDrs
                 handling.sample(parsed.data.steer, latestMotion.gForceLat, parsed.data.speedKmh)
             }
-            is Parsed.Motion -> { latestMotion = parsed.data; next = next.copy(motion = parsed.data) }
-            is Parsed.Status -> next = next.copy(status = parsed.data)
+            is Parsed.Motion -> {
+                latestMotion = parsed.data
+                next = next.copy(motion = parsed.data)
+                if (parsed.positions.isNotEmpty()) posAll = parsed.positions
+                recordTrackPoint(parsed.data, next.lap.lapDistance)
+                if (trackPathCache.isNotEmpty()) next = next.copy(trackPath = trackPathCache)
+            }
+            is Parsed.Status -> {
+                next = next.copy(status = parsed.data)
+                if (parsed.all.isNotEmpty()) statusAll = parsed.all
+            }
             is Parsed.Damage -> next = next.copy(damage = parsed.data)
             is Parsed.Setup -> next = next.copy(setup = parsed.data)
             is Parsed.Session -> next = next.copy(session = parsed.info)
             is Parsed.Participants -> next = next.copy(participants = parsed.list)
             is Parsed.History -> {
+                if (parsed.bestLapTimeMs > 0 && parsed.carIdx in 0 until F1Constants.MAX_CARS) {
+                    bestLapByCar[parsed.carIdx] = parsed.bestLapTimeMs
+                }
                 if (parsed.carIdx == parsed.header.playerCarIndex && parsed.bestLapTimeMs > 0) {
                     next = next.copy(bestLapTimeMs = parsed.bestLapTimeMs)
                 }
             }
             is Parsed.Event -> next = next.copy(events = pushEvent(prev.events, parsed.event))
-            is Parsed.Lap -> next = handleLap(next, parsed)
+            is Parsed.Lap -> {
+                next = handleLap(next, parsed)
+                if (parsed.all.isNotEmpty()) {
+                    lapAll = parsed.all
+                    next = buildStandings(next)
+                }
+            }
             is Parsed.Other -> {}
         }
 
@@ -163,6 +197,76 @@ object TelemetryRepository {
         out.addAll(list)
         while (out.size > 30) out.removeAt(out.size - 1)
         return out
+    }
+
+    /** Accumulate the player's world path, keyed by lap distance, into a circuit outline. */
+    private fun recordTrackPoint(motion: MotionData, lapDistance: Float) {
+        if (lapDistance < 0f || (motion.worldPosX == 0f && motion.worldPosZ == 0f)) return
+        val bucket = (lapDistance / 8f).toInt()
+        val isNew = !trackBuckets.containsKey(bucket)
+        trackBuckets[bucket] = motion.worldPosX to motion.worldPosZ
+        if (isNew && trackBuckets.size > 8) {
+            trackPathCache = trackBuckets.entries.sortedBy { it.key }.map { it.value }
+        }
+    }
+
+    /** Merge the latest per-car lap/status/DRS/position data into the standings list. */
+    private fun buildStandings(state: TelemetryState): TelemetryState {
+        if (lapAll.isEmpty()) return state
+        val playerIdx = state.header?.playerCarIndex ?: -1
+        val list = ArrayList<LiveCar>(lapAll.size)
+        var fastestMs = Long.MAX_VALUE
+        var fastestIdx = -1
+        for (lp in lapAll) {
+            if (lp.position <= 0 && lp.resultStatus < 2) continue
+            val st = statusAll.getOrNull(lp.index)
+            val part = state.participants.getOrNull(lp.index)
+            val name = part?.name?.takeIf { it.isNotBlank() } ?: "CAR ${lp.index + 1}"
+            val best = bestLapByCar.getOrElse(lp.index) { 0L }
+            if (best in 1 until fastestMs) { fastestMs = best; fastestIdx = lp.index }
+            list.add(
+                LiveCar(
+                    index = lp.index,
+                    position = lp.position,
+                    name = name,
+                    abbrev = abbrev(name, part?.teamId ?: 255, lp.index),
+                    teamId = part?.teamId ?: 255,
+                    lastLapMs = lp.lastLapMs,
+                    bestLapMs = best,
+                    visualTyre = st?.visualTyre ?: 0,
+                    tyreAge = st?.tyreAge ?: 0,
+                    ersPct = st?.ersPct ?: 0,
+                    drsOpen = drsAll.getOrElse(lp.index) { false },
+                    drsAllowed = (st?.drsAllowed ?: 0) == 1,
+                    pitting = lp.pitStatus != 0,
+                    resultStatus = lp.resultStatus,
+                    penaltiesSec = lp.penaltiesSec,
+                    deltaAheadMs = lp.deltaAheadMs,
+                    deltaLeaderMs = lp.deltaLeaderMs,
+                    lapDistance = lp.lapDistance,
+                    worldX = posAll.getOrNull(lp.index)?.first ?: 0f,
+                    worldZ = posAll.getOrNull(lp.index)?.second ?: 0f,
+                    isPlayer = lp.index == playerIdx,
+                )
+            )
+        }
+        list.sortBy { it.position }
+        return state.copy(
+            cars = list,
+            fastestLapCarIndex = fastestIdx,
+            fastestLapMs = if (fastestMs == Long.MAX_VALUE) 0L else fastestMs,
+        )
+    }
+
+    /** Three-letter driver code, from the real code table when known, else derived from the name. */
+    private fun abbrev(name: String, teamId: Int, index: Int): String {
+        val known = DriverCodes.forName(name)
+        if (known != null) return known
+        val token = name.trim().split(" ", "_", "-").lastOrNull { it.isNotBlank() } ?: name
+        val letters = token.filter { it.isLetter() }
+        return if (letters.length >= 3) letters.substring(0, 3).uppercase()
+        else if (letters.isNotEmpty()) letters.uppercase().padEnd(3, 'X')
+        else "C${index + 1}"
     }
 
     fun markDisconnectedIfStale(nowMs: Long) {

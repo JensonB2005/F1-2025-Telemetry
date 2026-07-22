@@ -13,11 +13,27 @@ package com.f1telemetry.viewer.telemetry
  */
 sealed interface Parsed {
     val header: Header
-    data class Motion(override val header: Header, val data: MotionData) : Parsed
+    data class Motion(
+        override val header: Header,
+        val data: MotionData,
+        val positions: List<Pair<Float, Float>> = emptyList(),
+    ) : Parsed
     data class Session(override val header: Header, val info: SessionInfo) : Parsed
-    data class Lap(override val header: Header, val data: LapData) : Parsed
-    data class Telemetry(override val header: Header, val data: CarTelemetry) : Parsed
-    data class Status(override val header: Header, val data: CarStatus) : Parsed
+    data class Lap(
+        override val header: Header,
+        val data: LapData,
+        val all: List<CarLapLite> = emptyList(),
+    ) : Parsed
+    data class Telemetry(
+        override val header: Header,
+        val data: CarTelemetry,
+        val allDrs: List<Boolean> = emptyList(),
+    ) : Parsed
+    data class Status(
+        override val header: Header,
+        val data: CarStatus,
+        val all: List<CarStatusLite> = emptyList(),
+    ) : Parsed
     data class Damage(override val header: Header, val data: CarDamage) : Parsed
     data class Setup(override val header: Header, val data: CarSetup) : Parsed
     data class Participants(override val header: Header, val list: List<ParticipantInfo>) : Parsed
@@ -54,14 +70,14 @@ object PacketParser {
         val h = parseHeader(r)
         val p = h.playerCarIndex.coerceIn(0, F1Constants.MAX_CARS - 1)
         return when (h.packetId) {
-            F1Constants.PACKET_MOTION -> Parsed.Motion(h, parseMotion(buf, length, p))
+            F1Constants.PACKET_MOTION -> Parsed.Motion(h, parseMotion(buf, length, p), parseMotionAll(buf, length))
             F1Constants.PACKET_SESSION -> Parsed.Session(h, parseSession(buf, length))
-            F1Constants.PACKET_LAP_DATA -> Parsed.Lap(h, parseLap(buf, length, p))
+            F1Constants.PACKET_LAP_DATA -> Parsed.Lap(h, parseLap(buf, length, p), parseLapAll(buf, length))
             F1Constants.PACKET_EVENT -> Parsed.Event(h, parseEvent(buf, length, h))
             F1Constants.PACKET_PARTICIPANTS -> Parsed.Participants(h, parseParticipants(buf, length))
             F1Constants.PACKET_CAR_SETUPS -> Parsed.Setup(h, parseSetup(buf, length, p))
-            F1Constants.PACKET_CAR_TELEMETRY -> Parsed.Telemetry(h, parseTelemetry(buf, length, p))
-            F1Constants.PACKET_CAR_STATUS -> Parsed.Status(h, parseStatus(buf, length, p))
+            F1Constants.PACKET_CAR_TELEMETRY -> Parsed.Telemetry(h, parseTelemetry(buf, length, p), parseDrsAll(buf, length))
+            F1Constants.PACKET_CAR_STATUS -> Parsed.Status(h, parseStatus(buf, length, p), parseStatusAll(buf, length))
             F1Constants.PACKET_CAR_DAMAGE -> Parsed.Damage(h, parseDamage(buf, length, p))
             F1Constants.PACKET_SESSION_HISTORY -> parseHistory(buf, length, h)
             else -> Parsed.Other(h)
@@ -291,6 +307,104 @@ object PacketParser {
             gForceLat = gLat, gForceLon = gLon, gForceVert = gVert,
             yaw = yaw, pitch = pitch, roll = roll, worldPosX = wx, worldPosZ = wz,
         )
+    }
+
+    /** World (x, z) position of every car, for the live track map. */
+    private fun parseMotionAll(buf: ByteArray, len: Int): List<Pair<Float, Float>> {
+        val s = stride(len, trailer = 0)
+        if (s < 60) return emptyList()
+        val out = ArrayList<Pair<Float, Float>>(F1Constants.MAX_CARS)
+        for (i in 0 until F1Constants.MAX_CARS) {
+            val r = ByteReader(buf, len)
+            r.seek(F1Constants.HEADER_SIZE + i * s)
+            val x = r.f32()
+            r.f32() // worldPosY
+            val z = r.f32()
+            out.add(x to z)
+        }
+        return out
+    }
+
+    /** Per-car lap slice for every car (timing tower). */
+    private fun parseLapAll(buf: ByteArray, len: Int): List<CarLapLite> {
+        val s = stride(len, trailer = 2)
+        if (s < 46) return emptyList()
+        val out = ArrayList<CarLapLite>(F1Constants.MAX_CARS)
+        for (i in 0 until F1Constants.MAX_CARS) {
+            val r = ByteReader(buf, len)
+            r.seek(F1Constants.HEADER_SIZE + i * s)
+            val lastLap = r.u32()
+            val curLap = r.u32()
+            r.u16(); r.u8(); r.u16(); r.u8() // sector 1/2 parts
+            val deltaFrontMs = r.u16(); val deltaFrontMin = r.u8()
+            val deltaLeaderMs = r.u16(); val deltaLeaderMin = r.u8()
+            val lapDistance = r.f32()
+            r.f32(); r.f32() // total distance, safety car delta
+            val carPos = r.u8()
+            val curLapNum = r.u8()
+            val pitStatus = r.u8()
+            r.u8() // num pit stops
+            r.u8() // sector
+            r.u8() // current lap invalid
+            val penalties = r.u8()
+            r.u8(); r.u8() // total warnings, corner-cutting warnings
+            r.u8(); r.u8() // unserved drive-through, stop-go
+            r.u8() // grid position
+            r.u8() // driver status
+            val resultStatus = r.u8()
+            out.add(
+                CarLapLite(
+                    index = i, position = carPos, lastLapMs = lastLap, currentLapMs = curLap,
+                    lapDistance = lapDistance, pitStatus = pitStatus, resultStatus = resultStatus,
+                    penaltiesSec = penalties,
+                    deltaAheadMs = deltaFrontMin * 60000 + deltaFrontMs,
+                    deltaLeaderMs = deltaLeaderMin * 60000 + deltaLeaderMs,
+                    currentLapNum = curLapNum,
+                )
+            )
+        }
+        return out
+    }
+
+    /** Per-car tyre / ERS / DRS-allowed slice for every car. */
+    private fun parseStatusAll(buf: ByteArray, len: Int): List<CarStatusLite> {
+        val s = stride(len, trailer = 0)
+        if (s < 55) return emptyList()
+        val out = ArrayList<CarStatusLite>(F1Constants.MAX_CARS)
+        for (i in 0 until F1Constants.MAX_CARS) {
+            val r = ByteReader(buf, len)
+            r.seek(F1Constants.HEADER_SIZE + i * s)
+            r.u8(); r.u8() // traction control, ABS
+            r.u8() // fuel mix
+            r.u8() // front brake bias
+            r.u8() // pit limiter
+            r.f32(); r.f32(); r.f32() // fuel in tank / capacity / remaining laps
+            r.u16(); r.u16() // max rpm, idle rpm
+            r.u8() // max gears
+            val drsAllowed = r.u8()
+            r.u16() // drs activation distance
+            val actualTyre = r.u8()
+            val visualTyre = r.u8()
+            val tyreAge = r.u8()
+            r.i8() // fia flags
+            r.f32(); r.f32() // engine power ICE / MGU-K
+            val ersStore = r.f32()
+            val ersPct = (ersStore / 40000f).coerceIn(0f, 100f).toInt()
+            out.add(CarStatusLite(i, visualTyre, actualTyre, tyreAge, ersPct, drsAllowed))
+        }
+        return out
+    }
+
+    /** DRS open/closed flag for every car. */
+    private fun parseDrsAll(buf: ByteArray, len: Int): List<Boolean> {
+        val s = stride(len, trailer = 3)
+        if (s < 60) return emptyList()
+        val out = ArrayList<Boolean>(F1Constants.MAX_CARS)
+        for (i in 0 until F1Constants.MAX_CARS) {
+            val drs = buf[F1Constants.HEADER_SIZE + i * s + 18].toInt() and 0xFF
+            out.add(drs == 1)
+        }
+        return out
     }
 
     private fun parseSession(buf: ByteArray, len: Int): SessionInfo {
