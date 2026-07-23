@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -29,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -42,9 +45,11 @@ import com.f1telemetry.viewer.data.MainViewModel
 import com.f1telemetry.viewer.ui.screens.AnalysisScreen
 import com.f1telemetry.viewer.ui.screens.CarScreen
 import com.f1telemetry.viewer.ui.screens.DashboardScreen
+import com.f1telemetry.viewer.ui.screens.HudScreen
 import com.f1telemetry.viewer.ui.screens.RaceScreen
 import com.f1telemetry.viewer.ui.screens.ReplayScreen
 import com.f1telemetry.viewer.ui.screens.TracesScreen
+import com.f1telemetry.viewer.ui.theme.AccentCyan
 import com.f1telemetry.viewer.ui.theme.AccentGreen
 import com.f1telemetry.viewer.ui.theme.F1Dark
 import com.f1telemetry.viewer.ui.theme.F1Red
@@ -67,6 +72,12 @@ private fun AppRoot(vm: MainViewModel = viewModel()) {
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
     val controller by vm.controller.collectAsStateWithLifecycle()
     var selected by remember { mutableIntStateOf(0) }
+    var hud by remember { mutableStateOf(false) }
+
+    if (hud) {
+        HudScreen(telemetry, onExit = { hud = false })
+        return
+    }
 
     val tabs = listOf(
         Tab("Dash", Icons.Filled.Speed),
@@ -79,7 +90,7 @@ private fun AppRoot(vm: MainViewModel = viewModel()) {
 
     Scaffold(
         containerColor = F1Dark,
-        topBar = { TopHeader(telemetry.connected, telemetry.playerName, controller.recording) },
+        topBar = { TopHeader(telemetry.connected, controller.recording, onOpenHud = { hud = true }) },
         bottomBar = {
             NavigationBar(containerColor = F1Surface) {
                 tabs.forEachIndexed { i, tab ->
@@ -126,9 +137,9 @@ private fun AppRoot(vm: MainViewModel = viewModel()) {
 }
 
 @Composable
-private fun TopHeader(connected: Boolean, player: String, recording: Boolean) {
+private fun TopHeader(connected: Boolean, recording: Boolean, onOpenHud: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().height(52.dp).padding(start = 16.dp, end = 4.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
         Text("F1 ", color = F1Red, fontSize = 20.sp, fontWeight = FontWeight.Black)
@@ -143,5 +154,8 @@ private fun TopHeader(connected: Boolean, player: String, recording: Boolean) {
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
         )
+        IconButton(onClick = onOpenHud) {
+            Icon(Icons.Filled.Fullscreen, contentDescription = "Driving HUD", tint = AccentCyan)
+        }
     }
 }
