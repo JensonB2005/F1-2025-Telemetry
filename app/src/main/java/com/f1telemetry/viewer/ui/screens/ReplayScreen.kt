@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import com.f1telemetry.viewer.data.ControllerState
 import com.f1telemetry.viewer.data.Mode
 import com.f1telemetry.viewer.data.TelemetryState
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import com.f1telemetry.viewer.ui.Fmt
 import com.f1telemetry.viewer.ui.components.LabeledValue
 import com.f1telemetry.viewer.ui.components.SectionCard
@@ -83,9 +85,18 @@ fun ReplayScreen(
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "Packets: ${telemetry.packetsReceived}   •   format ${telemetry.packetFormat}   •   game '${telemetry.gameYear}",
+                "Datagrams: ${telemetry.datagramsReceived}   •   parsed: ${telemetry.packetsReceived}   •   format ${telemetry.packetFormat}   •   game '${telemetry.gameYear}",
                 color = TextDim, fontSize = 11.sp,
             )
+            if (telemetry.lastSenderIp.isNotEmpty()) {
+                Text("Last sender: ${telemetry.lastSenderIp}", color = TextDim, fontSize = 11.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "This device's IP: ${localIpAddress() ?: "unknown"}",
+                color = AccentCyan, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace,
+            )
+            Text("Enter this IP in the game (or use Broadcast Mode).", color = TextDim, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -109,8 +120,14 @@ fun ReplayScreen(
                 Text("Error: $it", color = F1Red, fontSize = 12.sp)
             }
             Spacer(Modifier.height(8.dp))
+            Text("Setup & troubleshooting", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text(
-                "In F1 25: Settings → Telemetry Settings → UDP Telemetry ON, IP = this device's IP, Port = ${controller.port}, Format = 2025.",
+                "1. F1 25 → Settings → Telemetry Settings → UDP Telemetry: ON.\n" +
+                    "2. UDP IP Address: the device IP shown above (or turn UDP Broadcast Mode ON to skip the IP).\n" +
+                    "3. UDP Port: ${controller.port}   •   UDP Format: 2025   •   Send Rate: 20–60 Hz.\n" +
+                    "4. Phone and PC/console must be on the SAME Wi-Fi/LAN.\n\n" +
+                    "If 'Datagrams' stays 0: the packets aren't reaching the phone — check the IP, that both are on the same network, and that the router isn't blocking device-to-device traffic (AP/client isolation, or guest Wi-Fi). Some PC firewalls block outgoing UDP.\n" +
+                    "If 'Datagrams' climbs but 'parsed' stays 0: set the game's UDP Format to 2025.",
                 color = TextDim, fontSize = 11.sp,
             )
         }
@@ -176,5 +193,19 @@ fun ReplayScreen(
                 }
             }
         }
+    }
+}
+
+/** Best-guess LAN IPv4 of this device, to show the user what to enter in the game. */
+private fun localIpAddress(): String? {
+    return try {
+        java.util.Collections.list(NetworkInterface.getNetworkInterfaces())
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { java.util.Collections.list(it.inetAddresses) }
+            .filterIsInstance<Inet4Address>()
+            .firstOrNull { it.isSiteLocalAddress }
+            ?.hostAddress
+    } catch (e: Exception) {
+        null
     }
 }

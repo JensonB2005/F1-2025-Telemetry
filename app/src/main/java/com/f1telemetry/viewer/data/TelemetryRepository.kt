@@ -63,12 +63,28 @@ object TelemetryRepository {
         bestLapByCar.fill(0L)
         trackBuckets.clear()
         trackPathCache = emptyList()
+        rawCount = 0L
+        lastSenderIp = ""
         _state.value = TelemetryState(source = source)
     }
 
-    fun onRawPacket(buf: ByteArray, length: Int, nowMs: Long = System.currentTimeMillis()) {
+    private var rawCount = 0L
+    private var lastSenderIp = ""
+
+    fun onRawPacket(buf: ByteArray, length: Int, senderIp: String? = null, nowMs: Long = System.currentTimeMillis()) {
         recorder?.write(buf, length)
-        val parsed = PacketParser.parse(buf, length) ?: return
+        rawCount++
+        if (senderIp != null) lastSenderIp = senderIp
+        val parsed = PacketParser.parse(buf, length)
+        if (parsed == null) {
+            // Bytes are arriving even if we couldn't parse them — reflect that so
+            // the user can tell a network problem from a format/parse problem.
+            _state.value = _state.value.copy(
+                connected = true, lastPacketAtMs = nowMs,
+                datagramsReceived = rawCount, lastSenderIp = lastSenderIp,
+            )
+            return
+        }
         apply(parsed, nowMs)
     }
 
@@ -78,6 +94,8 @@ object TelemetryRepository {
             connected = true,
             lastPacketAtMs = nowMs,
             packetsReceived = prev.packetsReceived + 1,
+            datagramsReceived = rawCount,
+            lastSenderIp = lastSenderIp,
             header = parsed.header,
             packetFormat = parsed.header.packetFormat,
             gameYear = parsed.header.gameYear,

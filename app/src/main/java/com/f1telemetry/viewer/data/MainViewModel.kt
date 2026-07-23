@@ -70,6 +70,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 TelemetryRepository.markDisconnectedIfStale(System.currentTimeMillis())
             }
         }
+        // Start listening automatically so the app is ready without touching the screen.
+        startLive()
     }
 
     fun setPort(port: Int) { _controller.value = _controller.value.copy(port = port) }
@@ -79,13 +81,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         networkJob?.cancel()
         TelemetryRepository.resetSession("Live UDP :${_controller.value.port}")
         _controller.value = _controller.value.copy(mode = Mode.LIVE, error = null)
-        val receiver = UdpTelemetryReceiver(_controller.value.port)
+        val receiver = UdpTelemetryReceiver(_controller.value.port, getApplication())
         networkJob = viewModelScope.launch(Dispatchers.IO) {
             receiver.listen(
                 onError = { e ->
                     _controller.value = _controller.value.copy(error = e.message ?: "UDP error")
                 },
-                onPacket = { buf, len -> TelemetryRepository.onRawPacket(buf, len) },
+                onPacket = { buf, len, sender -> TelemetryRepository.onRawPacket(buf, len, sender) },
             )
         }
     }

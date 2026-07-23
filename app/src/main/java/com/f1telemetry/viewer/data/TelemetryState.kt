@@ -38,6 +38,8 @@ data class TelemetryState(
     val connected: Boolean = false,
     val lastPacketAtMs: Long = 0L,
     val packetsReceived: Long = 0L,
+    val datagramsReceived: Long = 0L,
+    val lastSenderIp: String = "",
     val packetFormat: Int = 0,
     val gameYear: Int = 0,
     val source: String = "Live UDP",
