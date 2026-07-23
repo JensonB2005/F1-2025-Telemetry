@@ -44,8 +44,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.f1telemetry.viewer.data.MainViewModel
 import com.f1telemetry.viewer.ui.screens.AnalysisScreen
 import com.f1telemetry.viewer.ui.screens.CarScreen
+import com.f1telemetry.viewer.ui.screens.BroadcastScreen
 import com.f1telemetry.viewer.ui.screens.DashboardScreen
-import com.f1telemetry.viewer.ui.screens.HudScreen
 import com.f1telemetry.viewer.ui.screens.RaceScreen
 import com.f1telemetry.viewer.ui.screens.ReplayScreen
 import com.f1telemetry.viewer.ui.screens.TracesScreen
@@ -75,7 +75,7 @@ private fun AppRoot(vm: MainViewModel = viewModel()) {
     var hud by remember { mutableStateOf(false) }
 
     if (hud) {
-        HudScreen(telemetry, onExit = { hud = false })
+        BroadcastScreen(telemetry, onExit = { hud = false })
         return
     }
 

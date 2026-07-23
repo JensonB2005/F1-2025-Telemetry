@@ -24,11 +24,10 @@ import com.f1telemetry.viewer.telemetry.F1Constants
 fun LiveTrackMap(
     path: List<Pair<Float, Float>>,
     cars: List<LiveCar>,
-    modifier: Modifier = Modifier,
-    heightDp: Int = 280,
+    modifier: Modifier = Modifier.fillMaxWidth().height(280.dp),
 ) {
-    Box(modifier.fillMaxWidth().height(heightDp.dp)) {
-        Canvas(Modifier.fillMaxWidth().height(heightDp.dp)) {
+    Box(modifier) {
+        Canvas(Modifier.matchParentSize()) {
             if (path.size < 4) return@Canvas
             var minX = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE
             var minZ = Float.MAX_VALUE; var maxZ = -Float.MAX_VALUE

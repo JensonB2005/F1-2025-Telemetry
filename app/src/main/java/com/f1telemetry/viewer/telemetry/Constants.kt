@@ -101,6 +101,15 @@ object F1Constants {
         else -> "Track $id"
     }
 
+    /** Approximate corner count per circuit, for the track-info panel. */
+    fun trackTurns(id: Int): Int = when (id) {
+        0 -> 14; 2 -> 16; 3 -> 15; 4 -> 14; 5 -> 19; 6 -> 14; 7 -> 18; 9 -> 14
+        10 -> 19; 11 -> 11; 12 -> 19; 13 -> 18; 14 -> 16; 15 -> 20; 16 -> 15
+        17 -> 10; 19 -> 17; 20 -> 20; 26 -> 14; 27 -> 19; 28 -> 15; 29 -> 27
+        30 -> 19; 31 -> 17; 32 -> 16
+        else -> 0
+    }
+
     fun sessionType(id: Int): String = when (id) {
         0 -> "Unknown"; 1 -> "Practice 1"; 2 -> "Practice 2"; 3 -> "Practice 3"
         4 -> "Short Practice"; 5 -> "Qualifying 1"; 6 -> "Qualifying 2"; 7 -> "Qualifying 3"

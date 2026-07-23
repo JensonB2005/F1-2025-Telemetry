@@ -422,11 +422,40 @@ object PacketParser {
         val timeLeft = r.u16()
         val duration = r.u16()
         val pitLimit = r.u8()
+
+        // Weather forecast lives after the fixed-size marshal-zone array. In the
+        // 2022–2025 formats: 5 status bytes, then 21 marshal zones × 5 bytes,
+        // safetyCar + networkGame, numForecast, then 8-byte forecast samples.
+        var safetyCar = 0
+        var rainNow = 0; var w5 = weather; var rain5 = 0; var w10 = weather; var rain10 = 0
+        val forecastBase = F1Constants.HEADER_SIZE + 127
+        val scOffset = F1Constants.HEADER_SIZE + 124
+        if (scOffset < len) safetyCar = buf[scOffset].toInt() and 0xFF
+        val numOffset = F1Constants.HEADER_SIZE + 126
+        if (numOffset < len) {
+            val num = (buf[numOffset].toInt() and 0xFF).coerceAtMost(64)
+            for (k in 0 until num) {
+                val base = forecastBase + k * 8
+                if (base + 8 > len) break
+                val sType = buf[base].toInt() and 0xFF
+                if (sType != sessionType) continue
+                val timeOffset = buf[base + 1].toInt() and 0xFF
+                val fWeather = buf[base + 2].toInt() and 0xFF
+                val rain = buf[base + 7].toInt() and 0xFF
+                when (timeOffset) {
+                    0 -> rainNow = rain
+                    5 -> { w5 = fWeather; rain5 = rain }
+                    10 -> { w10 = fWeather; rain10 = rain }
+                }
+            }
+        }
+
         return SessionInfo(
             weather = weather, trackTempC = trackTemp, airTempC = airTemp,
             totalLaps = totalLaps, trackLengthM = trackLength, sessionType = sessionType,
             trackId = trackId, sessionTimeLeft = timeLeft, sessionDuration = duration,
-            pitSpeedLimit = pitLimit,
+            pitSpeedLimit = pitLimit, safetyCarStatus = safetyCar,
+            rainNowPct = rainNow, weather5 = w5, rain5Pct = rain5, weather10 = w10, rain10Pct = rain10,
         )
     }
 

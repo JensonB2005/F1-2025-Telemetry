@@ -138,6 +138,11 @@ data class SessionInfo(
     val pitSpeedLimit: Int = 0,
     val safetyCarStatus: Int = 0,
     val networkGame: Boolean = false,
+    val rainNowPct: Int = 0,
+    val weather5: Int = 0,
+    val rain5Pct: Int = 0,
+    val weather10: Int = 0,
+    val rain10Pct: Int = 0,
 )
 
 /** Player-car slice of the Motion packet (id 0), for g-force / attitude. */
