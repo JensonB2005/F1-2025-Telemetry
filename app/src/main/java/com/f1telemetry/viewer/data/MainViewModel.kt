@@ -77,14 +77,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         startLive()
     }
 
-    fun setPort(port: Int) { _controller.value = _controller.value.copy(port = port) }
+    /** Only accept a valid UDP port; ignore junk so the socket never gets an out-of-range value. */
+    fun setPort(port: Int) {
+        if (port in 1..65535) _controller.value = _controller.value.copy(port = port)
+    }
+
+    private fun resolvedPort(): Int = _controller.value.port.let { if (it in 1..65535) it else 20777 }
 
     fun startLive() {
         stopReplay()
         networkJob?.cancel()
-        TelemetryRepository.resetSession("Live UDP :${_controller.value.port}")
-        _controller.value = _controller.value.copy(mode = Mode.LIVE, error = null)
-        val receiver = UdpTelemetryReceiver(_controller.value.port, getApplication())
+        val port = resolvedPort()
+        // Repair the stored port if it was somehow invalid so the UI reflects reality.
+        _controller.value = _controller.value.copy(port = port, mode = Mode.LIVE, error = null)
+        TelemetryRepository.resetSession("Live UDP :$port")
+        val receiver = UdpTelemetryReceiver(port, getApplication())
         networkJob = viewModelScope.launch(Dispatchers.IO) {
             receiver.listen(
                 onError = { e ->
@@ -111,7 +118,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_controller.value.mode != Mode.LIVE) startLive()
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                val port = _controller.value.port
+                val port = resolvedPort()
                 val data = ByteArray(64).also {
                     it[0] = (2025 and 0xFF).toByte()
                     it[1] = ((2025 shr 8) and 0xFF).toByte()

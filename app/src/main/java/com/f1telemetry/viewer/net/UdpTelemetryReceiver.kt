@@ -26,6 +26,7 @@ class UdpTelemetryReceiver(private val port: Int = 20777, private val context: C
     ) = withContext(Dispatchers.IO) {
         var socket: DatagramSocket? = null
         var lock: WifiManager.MulticastLock? = null
+        val boundPort = if (port in 1..65535) port else 20777
         try {
             val wifi = context?.applicationContext?.getSystemService(Context.WIFI_SERVICE) as? WifiManager
             lock = wifi?.createMulticastLock("f1-telemetry")?.apply {
@@ -37,7 +38,7 @@ class UdpTelemetryReceiver(private val port: Int = 20777, private val context: C
                 runCatching { broadcast = true }
                 soTimeout = 1000
                 runCatching { receiveBufferSize = 1 shl 20 }
-                bind(InetSocketAddress(port))
+                bind(InetSocketAddress(boundPort))
             }
             val buffer = ByteArray(4096)
             val packet = DatagramPacket(buffer, buffer.size)
