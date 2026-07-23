@@ -130,6 +130,7 @@ private fun AppRoot(vm: MainViewModel = viewModel()) {
                     onDelete = vm::deleteRecording,
                     onSetSpeed = vm::setReplaySpeed,
                     onRefresh = vm::refreshRecordings,
+                    onSelfTest = vm::sendTestPacket,
                 )
             }
         }

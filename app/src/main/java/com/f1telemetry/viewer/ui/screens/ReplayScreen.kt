@@ -63,6 +63,7 @@ fun ReplayScreen(
     onDelete: (String) -> Unit,
     onSetSpeed: (Float) -> Unit,
     onRefresh: () -> Unit,
+    onSelfTest: () -> Unit,
 ) {
     var portText by remember(controller.port) { mutableStateOf(controller.port.toString()) }
     var speed by remember { mutableStateOf(1f) }
@@ -114,7 +115,16 @@ fun ReplayScreen(
                 } else {
                     Button(onClick = onStartLive, colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)) { Text("Start listening") }
                 }
+                OutlinedButton(onClick = onSelfTest) { Text("Self-test") }
             }
+            if (controller.mode == Mode.LIVE) {
+                Text("Socket listening on 0.0.0.0:${controller.port}", color = AccentGreen, fontSize = 11.sp)
+            }
+            Text(
+                "Self-test sends a packet to this app. If 'Datagrams' goes up after tapping it, the app is " +
+                    "receiving fine and the issue is the game's IP/port or the network — not the app.",
+                color = TextDim, fontSize = 11.sp,
+            )
             controller.error?.let {
                 Spacer(Modifier.height(6.dp))
                 Text("Error: $it", color = F1Red, fontSize = 12.sp)

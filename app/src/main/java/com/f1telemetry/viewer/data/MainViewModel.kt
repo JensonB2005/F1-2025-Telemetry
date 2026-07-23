@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -96,6 +99,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         networkJob?.cancel(); networkJob = null
         if (_controller.value.recording) stopRecording()
         _controller.value = _controller.value.copy(mode = Mode.IDLE)
+    }
+
+    /**
+     * Sends dummy packets to the app's own listening socket (loopback + this
+     * device's LAN IP) to verify the receive path. If the datagram counter then
+     * increments, the app is listening correctly and any missing live data is a
+     * game/network configuration problem, not the app.
+     */
+    fun sendTestPacket() {
+        if (_controller.value.mode != Mode.LIVE) startLive()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val port = _controller.value.port
+                val data = ByteArray(64).also {
+                    it[0] = (2025 and 0xFF).toByte()
+                    it[1] = ((2025 shr 8) and 0xFF).toByte()
+                }
+                DatagramSocket().use { sender ->
+                    sender.broadcast = true
+                    listOf("127.0.0.1", "255.255.255.255").forEach { host ->
+                        runCatching {
+                            sender.send(DatagramPacket(data, data.size, InetAddress.getByName(host), port))
+                        }
+                    }
+                }
+            }.onFailure { e ->
+                _controller.value = _controller.value.copy(error = "Self-test failed: ${e.message}")
+            }
+        }
     }
 
     fun toggleRecording() {

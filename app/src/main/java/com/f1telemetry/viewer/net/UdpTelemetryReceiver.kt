@@ -34,9 +34,9 @@ class UdpTelemetryReceiver(private val port: Int = 20777, private val context: C
             }
             socket = DatagramSocket(null).apply {
                 reuseAddress = true
-                broadcast = true
+                runCatching { broadcast = true }
                 soTimeout = 1000
-                receiveBufferSize = 1 shl 20
+                runCatching { receiveBufferSize = 1 shl 20 }
                 bind(InetSocketAddress(port))
             }
             val buffer = ByteArray(4096)
