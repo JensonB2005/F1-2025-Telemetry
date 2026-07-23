@@ -178,29 +178,26 @@ private fun WeatherCell(label: String, weather: Int, rain: Int, s: Float, modifi
 private fun CenterColumn(state: TelemetryState, s: Float, modifier: Modifier) {
     val t = state.telemetry
     Panel("CAR INFORMATION", s, modifier) {
-        InputTrace(state, s, Modifier.fillMaxWidth().weight(0.85f))
-        Spacer(Modifier.height((3 * s).dp))
+        InputTrace(state, s, Modifier.fillMaxWidth().weight(0.6f))
+        Spacer(Modifier.height((2 * s).dp))
         GearBar(t.gear, s)
-        Spacer(Modifier.height((4 * s).dp))
-        Row(Modifier.fillMaxWidth().weight(0.7f), horizontalArrangement = Arrangement.spacedBy((6 * s).dp)) {
+        Spacer(Modifier.height((3 * s).dp))
+        Row(Modifier.fillMaxWidth().weight(0.8f), horizontalArrangement = Arrangement.spacedBy((6 * s).dp)) {
             VBar("ERS", (state.status.ersStoreEnergy / 40000f).coerceIn(0f, 100f) / 100f, AccentGreen, s, Modifier.weight(1f))
             VBar("BRAKE", t.brake, F1Red, s, Modifier.weight(1f))
             VBar("THROT", t.throttle, AccentGreen, s, Modifier.weight(1f))
             SteeringWheel(t.steer, s, Modifier.weight(1.6f).fillMaxHeight())
         }
-        Spacer(Modifier.height((4 * s).dp))
+        Spacer(Modifier.height((3 * s).dp))
         Row(Modifier.fillMaxWidth()) {
             Stat("FUEL", "%.1f L".format(state.status.fuelInTank), Color.White, s, Modifier.weight(1f))
             Stat("LAPS", "%+.2f".format(state.status.fuelRemainingLaps), if (state.status.fuelRemainingLaps < 0) F1Red else AccentGreen, s, Modifier.weight(1f))
+            Stat("BIAS", "${state.status.frontBrakeBias}%", Color.White, s, Modifier.weight(1f))
+            Stat("DIFF", "${state.setup.onThrottleDiff}%", Color.White, s, Modifier.weight(1f))
+            Stat("ERS", F1Constants.ersMode(state.status.ersDeployMode), AccentCyan, s, Modifier.weight(1.3f))
         }
         Spacer(Modifier.height((3 * s).dp))
-        Row(Modifier.fillMaxWidth()) {
-            Stat("BRAKE BIAS", "${state.status.frontBrakeBias}%", Color.White, s, Modifier.weight(1f))
-            Stat("DIFF", "${state.setup.onThrottleDiff}%", Color.White, s, Modifier.weight(1f))
-            Stat("ERS MODE", F1Constants.ersMode(state.status.ersDeployMode), AccentCyan, s, Modifier.weight(1.2f))
-        }
-        Spacer(Modifier.height((4 * s).dp))
-        CarTyres(state, s, Modifier.fillMaxWidth().weight(1.4f))
+        CarTyres(state, s, Modifier.fillMaxWidth().weight(1.15f))
     }
 }
 
@@ -286,45 +283,47 @@ private fun SteeringWheel(steer: Float, s: Float, modifier: Modifier) {
 private fun CarTyres(state: TelemetryState, s: Float, modifier: Modifier) {
     val t = state.telemetry
     val d = state.damage
-    Box(modifier) {
-        // Car body silhouette
-        Canvas(Modifier.fillMaxSize()) {
-            val w = size.width; val h = size.height
-            val bodyW = w * 0.16f
-            drawRoundRect(
-                color = Color(0xFF1C1C28),
-                topLeft = Offset(w / 2f - bodyW / 2f, h * 0.08f),
-                size = androidx.compose.ui.geometry.Size(bodyW, h * 0.84f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(bodyW * 0.4f),
-            )
+    // Structured layout (front pair over rear pair, slim car in the middle) so
+    // nothing overlaps or clips regardless of available height.
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceEvenly) {
+            TyreReadout("FL", 2, t, d, s)
+            TyreReadout("RL", 0, t, d, s)
         }
-        TyreCorner(2, t, d, s, Modifier.align(Alignment.TopStart))
-        TyreCorner(3, t, d, s, Modifier.align(Alignment.TopEnd))
-        TyreCorner(0, t, d, s, Modifier.align(Alignment.BottomStart))
-        TyreCorner(1, t, d, s, Modifier.align(Alignment.BottomEnd))
+        Box(Modifier.weight(0.45f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxHeight(0.9f).width((22 * s).dp)) {
+                drawRoundRect(
+                    color = Color(0xFF20202C),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.45f),
+                )
+            }
+        }
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceEvenly) {
+            TyreReadout("FR", 3, t, d, s)
+            TyreReadout("RR", 1, t, d, s)
+        }
     }
 }
 
 @Composable
-private fun TyreCorner(
+private fun TyreReadout(
+    label: String,
     i: Int,
     t: com.f1telemetry.viewer.telemetry.CarTelemetry,
     d: com.f1telemetry.viewer.telemetry.CarDamage,
     s: Float,
-    modifier: Modifier,
 ) {
     val surface = t.tyreSurfaceTempC.getOrElse(i) { 0 }
     val inner = t.tyreInnerTempC.getOrElse(i) { 0 }
     val wear = d.tyreWearPct.getOrElse(i) { 0f }
     val brake = t.brakesTempC.getOrElse(i) { 0 }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width((10 * s).dp).height((30 * s).dp).clip(RoundedCornerShape(3.dp)).background(tempColor(surface)))
-        Spacer(Modifier.width((4 * s).dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width((8 * s).dp).height((26 * s).dp).clip(RoundedCornerShape(3.dp)).background(tempColor(surface)))
+        Spacer(Modifier.width((5 * s).dp))
         Column {
-            Text("WEAR ${wear.toInt()}%", color = wearColor(wear), fontSize = (9 * s).sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Text("SURF $surface°", color = Color.White, fontSize = (9 * s).sp, fontFamily = FontFamily.Monospace)
-            Text("CORE $inner°", color = TextDim, fontSize = (9 * s).sp, fontFamily = FontFamily.Monospace)
-            Text("BRK $brake°", color = brakeTempColor(brake), fontSize = (9 * s).sp, fontFamily = FontFamily.Monospace)
+            Text("$label  $surface°", color = Color.White, fontSize = (11 * s).sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Text("wear ${wear.toInt()}%  core $inner°", color = wearColor(wear), fontSize = (8.5f * s).sp, fontFamily = FontFamily.Monospace)
+            Text("brake $brake°", color = brakeTempColor(brake), fontSize = (8.5f * s).sp, fontFamily = FontFamily.Monospace)
         }
     }
 }
@@ -409,8 +408,10 @@ private fun FocusBanner(state: TelemetryState, s: Float) {
         Text("$number", color = teamColor, fontSize = (30 * s).sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
         Spacer(Modifier.width((10 * s).dp))
         Column(Modifier.weight(1f)) {
-            Text(first.uppercase(), color = TextDim, fontSize = (11 * s).sp)
-            Text(last.uppercase().ifBlank { first.uppercase() }, color = Color.White, fontSize = (20 * s).sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Clip)
+            if (last.isNotBlank()) {
+                Text(first.uppercase(), color = TextDim, fontSize = (11 * s).sp)
+            }
+            Text((if (last.isNotBlank()) last else first).uppercase(), color = Color.White, fontSize = (20 * s).sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Clip)
             Text(F1Constants.team(teamId), color = TextDim, fontSize = (9 * s).sp)
         }
         Text(if (player != null) "P${player.position}" else "P-", color = teamColor, fontSize = (34 * s).sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
